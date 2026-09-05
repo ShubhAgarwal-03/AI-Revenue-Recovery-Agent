@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Revenue Recovery Engine — Ledger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #12181f;
+    --ink-soft: #56606b;
+    --paper: #f3f4ef;
+    --panel: #ffffff;
+    --line: #dcdfd6;
+    --teal: #0f6f6f;
+    --teal-soft: #e3efee;
+    --rust: #a8492f;
+    --rust-soft: #f6e8e3;
+    --gold: #a2802e;
+    --radius: 3px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 14px;
+  }
+  .num, .mono { font-family: "IBM Plex Mono", "Consolas", monospace; }
+  h1, h2, .display {
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  a { color: inherit; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 28px 40px 18px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 26px; margin: 0; }
+  header .sub { color: var(--ink-soft); font-size: 13px; margin-top: 4px; }
+  .batch-picker { display: flex; align-items: center; gap: 10px; }
+  .batch-picker label { color: var(--ink-soft); font-size: 12px; }
+  select {
+    font-family: inherit; font-size: 14px; padding: 7px 10px;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--panel); color: var(--ink);
+  }
+  main { max-width: 1240px; margin: 0 auto; padding: 28px 40px 80px; }
+
+  /* KPI ledger row */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    margin-bottom: 28px;
+  }
+  .kpi {
+    padding: 18px 22px;
+    border-right: 1px solid var(--line);
+  }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { font-size: 12px; color: var(--ink-soft); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; line-height: 1; }
+  .kpi .value.teal { color: var(--teal); }
+  .kpi .value.rust { color: var(--rust); }
+  .kpi .footnote { font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
+
+  section { margin-bottom: 32px; }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px solid var(--ink); padding-bottom: 6px; margin-bottom: 16px;
+  }
+  .section-head h2 { font-size: 17px; margin: 0; }
+  .section-head .note { font-size: 12px; color: var(--ink-soft); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; }
+  @media (max-width: 880px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  /* Funnel */
+  .funnel-step { margin-bottom: 10px; }
+  .funnel-row {
+    display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  .funnel-label { width: 128px; flex-shrink: 0; color: var(--ink-soft); }
+  .funnel-bar-track { flex: 1; height: 22px; background: var(--paper); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .funnel-bar-fill { height: 100%; background: var(--teal); transition: width 0.6s ease; }
+  .funnel-count { width: 52px; text-align: right; flex-shrink: 0; }
+
+  /* Donut */
+  .donut-wrap { display: flex; align-items: center; gap: 24px; }
+  .donut { width: 168px; height: 168px; border-radius: 50%; flex-shrink: 0; }
+  .donut-legend { flex: 1; }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .legend-row .cat { flex: 1; }
+  .legend-row .cnt { color: var(--ink-soft); }
+
+  /* Rejection reasons */
+  .reason-row { display: flex; align-items: center; gap: 12px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .reason-row:last-child { border-bottom: none; }
+  .reason-name { width: 200px; flex-shrink: 0; }
+  .reason-bar-track { flex: 1; height: 16px; background: var(--paper); border: 1px solid var(--line); }
+  .reason-bar-fill { height: 100%; background: var(--rust); }
+  .reason-count { width: 32px; text-align: right; }
+  .empty-note { color: var(--ink-soft); font-size: 13px; padding: 10px 0; }
+
+  /* Exceptions */
+  .exception-card {
+    border: 1px solid var(--line); border-left: 3px solid var(--rust);
+    background: var(--panel); padding: 12px 16px; margin-bottom: 10px; border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .exception-card .top-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 4px; }
+  .exception-card .reasons { font-size: 12.5px; margin-top: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 2px; background: var(--rust-soft); color: var(--rust); margin-right: 4px; }
+
+  /* Trend */
+  .chart-box { border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius); padding: 18px; }
+
+  /* Audit table */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--ink-soft); font-weight: 500; font-size: 11.5px; text-transform: none; border-bottom: 1px solid var(--ink); }
+  tr:hover td { background: var(--teal-soft); }
+  .pill { padding: 1px 7px; border-radius: 2px; font-size: 11px; }
+  .pill.pass { background: var(--teal-soft); color: var(--teal); }
+  .pill.fail { background: var(--rust-soft); color: var(--rust); }
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  .table-controls { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+  .table-controls button {
+    font-family: inherit; font-size: 12px; padding: 5px 10px;
+    border: 1px solid var(--line); background: var(--panel); border-radius: var(--radius); cursor: pointer;
+  }
+  .table-controls button.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .status-line { color: var(--ink-soft); font-size: 13px; padding: 60px 0; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>AI Revenue Recovery Engine</h1>
+    <div class="sub">Diagnose → policy → compliance gate → execute → audit — every decision, immutable.</div>
+  </div>
+  <div class="batch-picker">
+    <label for="batchSelect">Batch</label>
+    <select id="batchSelect"></select>
+  </div>
+</header>
+
+<main id="main">
+  <div class="status-line" id="statusLine">Loading batches…</div>
+</main>
+
+<script>
+const API = window.location.origin;
+let currentBatch = null;
+let trendChart = null;
+let auditRows = [];
+let auditFilter = "all";
+
+async function api(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+function fmtInr(n) {
+  return "₹" + (n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+function pct(n) {
+  return ((n ?? 0) * 100).toFixed(1) + "%";
+}
+const CATEGORY_COLORS = {
+  soft_decline: "#0f6f6f", hard_decline: "#a8492f", insufficient_funds: "#a2802e",
+  gateway_error: "#4b6a8a", genuine_abandonment: "#7a6ba0", mandate_expiry: "#3f8f5f",
+  willful_non_payment: "#8a4b6a",
+};
+
+async function boot() {
+  let batches;
+  try {
+    batches = await api("/batches");
+  } catch (e) {
+    document.getElementById("statusLine").textContent =
+      "Couldn't reach the API. Start it with: uvicorn backend.app.main:app --reload";
+    return;
+  }
+  const select = document.getElementById("batchSelect");
+  if (!batches.length) {
+    document.getElementById("statusLine").textContent =
+      "No batches yet. Run one: python backend/scripts/run_batch.py --batch data/events/batch_001.json --batch-id batch_001";
+    return;
+  }
+  batches.forEach(b => {
+    const opt = document.createElement("option");
+    opt.value = b; opt.textContent = b;
+    select.appendChild(opt);
+  });
+  select.value = batches[batches.length - 1];
+  currentBatch = select.value;
+  select.addEventListener("change", () => { currentBatch = select.value; renderAll(); });
+
+  buildLayout();
+  await renderAll();
+}
+
+function buildLayout() {
+  document.getElementById("main").innerHTML = `
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <section>
+      <div class="section-head"><h2>Recovery funnel</h2><span class="note" id="funnelNote"></span></div>
+      <div id="funnel"></div>
+    </section>
+
+    <div class="grid-2">
+      <section>
+        <div class="section-head"><h2>Root-cause breakdown</h2></div>
+        <div class="donut-wrap">
+          <div class="donut" id="donut"></div>
+          <div class="donut-legend" id="donutLegend"></div>
+        </div>
+      </section>
+      <section>
+        <div class="section-head"><h2>Compliance rejections</h2></div>
+        <div id="reasons"></div>
+      </section>
+    </div>
+
+    <section>
+      <div class="section-head"><h2>Exceptions</h2><span class="note">Cases where nothing was ever executed</span></div>
+      <div id="exceptions"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Cross-batch trend</h2><span class="note">Recovery rate &amp; lift, in run order</span></div>
+      <div class="chart-box"><canvas id="trendCanvas" height="90"></canvas></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Audit ledger</h2><span class="note" id="auditNote"></span></div>
+      <div class="table-controls">
+        <button data-f="all" class="active">All</button>
+        <button data-f="agent">Agent</button>
+        <button data-f="baseline">Baseline</button>
+        <button data-f="rejected">Rejected only</button>
+      </div>
+      <div class="table-scroll"><table id="auditTable"></table></div>
+    </section>
+  `;
+  document.querySelectorAll(".table-controls button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".table-controls button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      auditFilter = btn.dataset.f;
+      renderAuditTable();
+    });
+  });
+}
+
+async function renderAll() {
+  const [metrics, audit, exceptions, trend] = await Promise.all([
+    api(`/metrics/${currentBatch}`),
+    api(`/audit?batch_id=${currentBatch}`),
+    api(`/exceptions/${currentBatch}`),
+    api(`/metrics-trend`),
+  ]);
+  auditRows = audit;
+  renderKpis(metrics);
+  renderFunnel(audit.filter(d => !d.is_baseline));
+  renderDonut(audit.filter(d => !d.is_baseline));
+  renderReasons(metrics);
+  renderExceptions(exceptions);
+  renderTrend(trend);
+  renderAuditTable();
+}
+
+function renderKpis(m) {
+  document.getElementById("kpiRow").innerHTML = `
+    <div class="kpi">
+      <div class="label">Recovery rate</div>
+      <div class="value teal">${pct(m.recovery_rate)}</div>
+      <div class="footnote">${m.total_events} events processed</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Lift vs baseline</div>
+      <div class="value teal num">${fmtInr(m.lift_inr)}</div>
+      <div class="footnote num">${fmtInr(m.agent_recovered_inr)} agent — ${fmtInr(m.baseline_recovered_inr)} baseline</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Compliance rejections</div>
+      <div class="value rust">${m.compliance_rejections}</div>
+      <div class="footnote">${m.gate1_low_confidence_overrides} low-confidence Gate 1 overrides</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Fallbacks used</div>
+      <div class="value">${m.fallback_actions_used}</div>
+      <div class="footnote">${m.fallback_actions_executed} executed · ${m.fallback_actions_recovered_money} recovered money</div>
+    </div>
+  `;
+}
+
+function renderFunnel(agentRows) {
+  const detected = agentRows.length;
+  const gate2Passed = agentRows.filter(d => d.compliance_passed || d.fallback_compliance_passed).length;
+  const executed = agentRows.filter(d => d.executed).length;
+  const recovered = agentRows.filter(d => d.outcome === "recovered").length;
+
+  const steps = [
+    ["Detected", detected],
+    ["Gate 1 passed", detected],
+    ["Gate 2 passed", gate2Passed],
+    ["Executed", executed],
+    ["Recovered", recovered],
+  ];
+  const max = detected || 1;
+  document.getElementById("funnel").innerHTML = steps.map(([label, count]) => `
+    <div class="funnel-step">
+      <div class="funnel-row">
+        <div class="funnel-label">${label}</div>
+        <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:${(count / max) * 100}%"></div></div>
+        <div class="funnel-count num">${count}</div>
+      </div>
+    </div>
+  `).join("");
+  document.getElementById("funnelNote").textContent =
+    detected ? `${Math.round((recovered / detected) * 100)}% of detected events ended in recovered revenue` : "";
+}
+
+function renderDonut(agentRows) {
+  const counts = {};
+  agentRows.forEach(d => { counts[d.diagnosed_category] = (counts[d.diagnosed_category] || 0) + 1; });
+  const total = agentRows.length || 1;
+  let acc = 0;
+  const segments = Object.entries(counts).map(([cat, n]) => {
+    const start = (acc / total) * 360;
+    acc += n;
+    const end = (acc / total) * 360;
+    const color = CATEGORY_COLORS[cat] || "#888";
+    return `${color} ${start}deg ${end}deg`;
+  });
+  document.getElementById("donut").style.background = segments.length
+    ? `conic-gradient(${segments.join(",")})`
+    : "#e5e5e0";
+  document.getElementById("donutLegend").innerHTML = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, n]) => `
+      <div class="legend-row">
+        <div class="swatch" style="background:${CATEGORY_COLORS[cat] || '#888'}"></div>
+        <div class="cat">${cat.replace(/_/g, " ")}</div>
+        <div class="cnt num">${n}</div>
+      </div>
+    `).join("") || `<div class="empty-note">No agent decisions in this batch.</div>`;
+}
+
+function renderReasons(m) {
+  const entries = Object.entries(m.compliance_rejection_reasons || {}).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    document.getElementById("reasons").innerHTML =
+      `<div class="empty-note">No compliance rejections in this batch.</div>`;
+    return;
+  }
+  const max = Math.max(...entries.map(e => e[1]));
+  document.getElementById("reasons").innerHTML = entries.map(([reason, n]) => `
+    <div class="reason-row">
+      <div class="reason-name">${reason.replace(/_/g, " ")}</div>
+      <div class="reason-bar-track"><div class="reason-bar-fill" style="width:${(n / max) * 100}%"></div></div>
+      <div class="reason-count num">${n}</div>
+    </div>
+  `).join("");
+}
+
+function renderExceptions(rows) {
+  if (!rows.length) {
+    document.getElementById("exceptions").innerHTML =
+      `<div class="empty-note">None — every event this batch was either executed or explicitly declined by design.</div>`;
+    return;
+  }
+  document.getElementById("exceptions").innerHTML = rows.map(r => `
+    <div class="exception-card">
+      <div class="top-row">
+        <span class="mono">${r.display_id || r.event_id}</span>
+        <span>${r.category.replace(/_/g, " ")}</span>
+      </div>
+      <div>
+        ${r.gate1_low_confidence_override ? '<span class="tag">gate 1 override</span>' : ""}
+        Attempted <strong>${r.attempted_action}</strong>${r.fallback_action ? `, fell back to <strong>${r.fallback_action}</strong> (also rejected)` : " — no fallback existed"}.
+      </div>
+      <div class="reasons mono">${(r.rejection_reasons || []).join(" · ")}</div>
+    </div>
+  `).join("");
+}
+
+function renderTrend(trend) {
+  const labels = trend.map(t => t.batch_id);
+  const recoveryRates = trend.map(t => t.recovery_rate * 100);
+  const lifts = trend.map(t => t.lift_inr);
+  const ctx = document.getElementById("trendCanvas").getContext("2d");
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Recovery rate (%)",
+          data: recoveryRates,
+          borderColor: "#0f6f6f",
+          backgroundColor: "#0f6f6f",
+          yAxisID: "y",
+          tension: 0.25,
+          pointRadius: 3,
+        },
+        {
+          label: "Lift (₹)",
+          data: lifts,
+          borderColor: "#a2802e",
+          backgroundColor: "#a2802e",
+          yAxisID: "y1",
+          tension: 0.25,
+          pointRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { type: "linear", position: "left", title: { display: true, text: "Recovery rate (%)" } },
+        y1: { type: "linear", position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Lift (₹)" } },
+      },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { family: "IBM Plex Sans" } } } },
+    },
+  });
+}
+
+function renderAuditTable() {
+  let rows = auditRows;
+  if (auditFilter === "agent") rows = rows.filter(r => !r.is_baseline);
+  else if (auditFilter === "baseline") rows = rows.filter(r => r.is_baseline);
+  else if (auditFilter === "rejected") rows = rows.filter(r => !r.compliance_passed);
+
+  document.getElementById("auditNote").textContent = `${rows.length} of ${auditRows.length} decisions shown`;
+
+  const head = `
+    <tr>
+      <th>ID</th><th>Type</th><th>Category</th><th>Action</th><th>Gate 1</th>
+      <th>Gate 2</th><th>Fallback</th><th>Executed</th><th>Outcome</th><th>Recovered</th>
+    </tr>`;
+  const body = rows.slice(0, 200).map(r => `
+    <tr>
+      <td class="mono">${r.display_id || r.id.slice(0, 8)}</td>
+      <td>${r.is_baseline ? "baseline" : "agent"}</td>
+      <td>${r.diagnosed_category.replace(/_/g, " ")}</td>
+      <td>${r.chosen_action}</td>
+      <td>${r.gate1_low_confidence_override ? '<span class="tag">override</span>' : "—"}</td>
+      <td><span class="pill ${r.compliance_passed ? "pass" : "fail"}">${r.compliance_passed ? "passed" : "rejected"}</span></td>
+      <td>${r.fallback_action ? `${r.fallback_action} (${r.fallback_compliance_passed ? "ok" : "failed"})` : "—"}</td>
+      <td>${r.executed ? "yes" : "no"}</td>
+      <td>${r.outcome || "—"}</td>
+      <td class="num">${fmtInr(r.amount_recovered_inr)}</td>
+    </tr>
+  `).join("");
+  document.getElementById("auditTable").innerHTML = head + body;
+}
+
+boot();
+</script>
+</body>
+</html>

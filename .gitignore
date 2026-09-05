@@ -1,0 +1,44 @@
+@'
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment files -- NEVER commit real secrets/config
+.env
+.env.local
+
+# Database files -- generated locally, never commit actual data
+*.db
+*.sqlite
+*.sqlite3
+revenue_recovery.db
+
+# Generated synthetic data / batches -- these are outputs, not source
+data/events/*.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+'@ | Set-Content -Path ".gitignore" -Encoding utf8
