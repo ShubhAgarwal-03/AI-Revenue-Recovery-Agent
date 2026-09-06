@@ -65,15 +65,32 @@ worse than it is by not distinguishing "escalated because confidence was low" fr
 "escalated because the math says escalation is the right call at this amount." Old
 field preserved for backward compatibility.
 
-## 4. Compliance rejections on a single batch are dominated by `cooldown_active`
+## 4. Compliance rejections on `batch_001` are dominated by `cooldown_active` — cause is cross-batch, not within-batch
 
-On `batch_001` (300 events), all 134 compliance rejections were `cooldown_active`.
-This is a batch-generation artifact, not an overly strict gate: 300 events over a
-smaller synthetic customer pool naturally produces repeat `customer_id`s within one
-batch run, which trips the cooldown window. Of the 134 rejected actions, all 134 fell
-back successfully and executed (100% graceful degradation), but only 18 of those
-fallbacks actually recovered money — worth distinguishing "the fallback fired" from
-"the fallback worked" when reporting this number.
+On the `batch_001` run recorded in `docs/failure_case_writeup.md`, all 134 compliance
+rejections were `cooldown_active`. This is **not** simply "300 events over a small
+customer pool naturally repeating within one batch" — `data/synthetic_generator.py`
+draws every event's `customer_id` from the same fixed pool of 400 (`cust_1`–`cust_400`)
+regardless of which script or batch is generating events. The decision IDs in that run
+(`DEC-002915`, `DEC-002919`, etc.) are in the high-2000s, confirming `batch_001` was run
+against a database that already had ~2,800 prior decisions in it — almost certainly the
+8,000-event bandit experiment, which draws from the identical 400-customer pool. So most
+of `batch_001`'s customers had already been "contacted" minutes earlier by an unrelated
+prior run, which is what actually trips the cooldown window at that rate.
+
+**Verified independently:** re-running `batch_001` (`--seed 1`) against a genuinely fresh,
+empty database gives only 27 `cooldown_active` rejections and 2 fallback recoveries — not
+134 and 18. The escalation-split numbers (9 / 73 / 29 / 111) *did* reproduce exactly on a
+clean run, since those depend only on diagnosis confidence and category, not on
+customer contact history. The 134/18 figures are real numbers from a real ledger, not
+fabricated, but they describe a batch run stacked on top of prior unrelated runs, not an
+isolated 300-event experiment — worth stating explicitly if this number comes up under
+questioning.
+
+Of the 134 rejected actions, all 134 fell back successfully and executed (100% graceful
+degradation), but only 18 of those fallbacks actually recovered money — worth
+distinguishing "the fallback fired" from "the fallback worked" when reporting this number,
+regardless of which run's counts you cite.
 
 ## 5. Repo cleanup
 
