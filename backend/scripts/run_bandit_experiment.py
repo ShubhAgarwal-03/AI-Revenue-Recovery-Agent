@@ -11,16 +11,19 @@ from backend.app.db import init_db, SessionLocal, engine
 from backend.app.pipeline import run_batch
 from data.synthetic_generator import generate
 
+EVENTS_PER_ROUND = 400
+NUM_ROUNDS = 20
+
 
 def main():
     init_db(engine)
     db = SessionLocal()
     rates = []
     try:
-        for i, seed in enumerate(range(1, 11), start=1):
-            events = generate(100, seed=seed)
+        for i, seed in enumerate(range(1, NUM_ROUNDS + 1), start=1):
+            events = generate(EVENTS_PER_ROUND, seed=seed)
             batch_id = f"bandit_experiment_batch_{i}"
-            report = run_batch(db, batch_id, events)
+            report = run_batch(db, batch_id, events, outcome_seed=seed)
             rate = report["recovery_rate"]
             rates.append(rate)
             print(f"batch {i} (seed={seed}): recovery_rate={rate:.4f}")
@@ -32,7 +35,7 @@ def main():
     delta = last_three - first_three
 
     print()
-    print("All 10 recovery rates:", [round(r, 4) for r in rates])
+    print(f"All {NUM_ROUNDS} recovery rates:", [round(r, 4) for r in rates])
     print(f"Mean of first 3 batches: {first_three:.4f}")
     print(f"Mean of last 3 batches:  {last_three:.4f}")
     if delta > 0.01:

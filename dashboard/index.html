@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Revenue Recovery Engine — Ledger</title>
+<title>AI Revenue Recovery Engine â€” Ledger</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root {
@@ -150,7 +150,7 @@
 <header>
   <div>
     <h1>AI Revenue Recovery Engine</h1>
-    <div class="sub">Diagnose → policy → compliance gate → execute → audit — every decision, immutable.</div>
+    <div class="sub">Diagnose â†’ policy â†’ compliance gate â†’ execute â†’ audit â€” every decision, immutable.</div>
   </div>
   <div class="batch-picker">
     <label for="batchSelect">Batch</label>
@@ -159,7 +159,7 @@
 </header>
 
 <main id="main">
-  <div class="status-line" id="statusLine">Loading batches…</div>
+  <div class="status-line" id="statusLine">Loading batchesâ€¦</div>
 </main>
 
 <script>
@@ -176,7 +176,7 @@ async function api(path) {
 }
 
 function fmtInr(n) {
-  return "₹" + (n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  return "â‚¹" + (n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 function pct(n) {
   return ((n ?? 0) * 100).toFixed(1) + "%";
@@ -296,17 +296,18 @@ function renderKpis(m) {
     <div class="kpi">
       <div class="label">Lift vs baseline</div>
       <div class="value teal num">${fmtInr(m.lift_inr)}</div>
-      <div class="footnote num">${fmtInr(m.agent_recovered_inr)} agent — ${fmtInr(m.baseline_recovered_inr)} baseline</div>
+      <div class="footnote num">${fmtInr(m.agent_recovered_inr)} agent â€” ${fmtInr(m.baseline_recovered_inr)} baseline</div>
     </div>
     <div class="kpi">
       <div class="label">Compliance rejections</div>
       <div class="value rust">${m.compliance_rejections}</div>
+      <div class="footnote">${m.escalation_breakdown.high_value_policy_escalations} high-value policy escalations (not overrides)</div>
       <div class="footnote">${m.gate1_low_confidence_overrides} low-confidence Gate 1 overrides</div>
     </div>
     <div class="kpi">
       <div class="label">Fallbacks used</div>
       <div class="value">${m.fallback_actions_used}</div>
-      <div class="footnote">${m.fallback_actions_executed} executed · ${m.fallback_actions_recovered_money} recovered money</div>
+      <div class="footnote">${m.fallback_actions_executed} executed Â· ${m.fallback_actions_recovered_money} recovered money</div>
     </div>
   `;
 }
@@ -384,7 +385,7 @@ function renderReasons(m) {
 function renderExceptions(rows) {
   if (!rows.length) {
     document.getElementById("exceptions").innerHTML =
-      `<div class="empty-note">None — every event this batch was either executed or explicitly declined by design.</div>`;
+      `<div class="empty-note">None â€” every event this batch was either executed or explicitly declined by design.</div>`;
     return;
   }
   document.getElementById("exceptions").innerHTML = rows.map(r => `
@@ -395,9 +396,9 @@ function renderExceptions(rows) {
       </div>
       <div>
         ${r.gate1_low_confidence_override ? '<span class="tag">gate 1 override</span>' : ""}
-        Attempted <strong>${r.attempted_action}</strong>${r.fallback_action ? `, fell back to <strong>${r.fallback_action}</strong> (also rejected)` : " — no fallback existed"}.
+        Attempted <strong>${r.attempted_action}</strong>${r.fallback_action ? `, fell back to <strong>${r.fallback_action}</strong> (also rejected)` : " â€” no fallback existed"}.
       </div>
-      <div class="reasons mono">${(r.rejection_reasons || []).join(" · ")}</div>
+      <div class="reasons mono">${(r.rejection_reasons || []).join(" Â· ")}</div>
     </div>
   `).join("");
 }
@@ -423,7 +424,7 @@ function renderTrend(trend) {
           pointRadius: 3,
         },
         {
-          label: "Lift (₹)",
+          label: "Lift (â‚¹)",
           data: lifts,
           borderColor: "#a2802e",
           backgroundColor: "#a2802e",
@@ -438,7 +439,7 @@ function renderTrend(trend) {
       interaction: { mode: "index", intersect: false },
       scales: {
         y: { type: "linear", position: "left", title: { display: true, text: "Recovery rate (%)" } },
-        y1: { type: "linear", position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Lift (₹)" } },
+        y1: { type: "linear", position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Lift (â‚¹)" } },
       },
       plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { family: "IBM Plex Sans" } } } },
     },
@@ -464,11 +465,11 @@ function renderAuditTable() {
       <td>${r.is_baseline ? "baseline" : "agent"}</td>
       <td>${r.diagnosed_category.replace(/_/g, " ")}</td>
       <td>${r.chosen_action}</td>
-      <td>${r.gate1_low_confidence_override ? '<span class="tag">override</span>' : "—"}</td>
+      <td>${r.gate1_low_confidence_override ? '<span class="tag">override</span>' : "â€”"}</td>
       <td><span class="pill ${r.compliance_passed ? "pass" : "fail"}">${r.compliance_passed ? "passed" : "rejected"}</span></td>
-      <td>${r.fallback_action ? `${r.fallback_action} (${r.fallback_compliance_passed ? "ok" : "failed"})` : "—"}</td>
+      <td>${r.fallback_action ? `${r.fallback_action} (${r.fallback_compliance_passed ? "ok" : "failed"})` : "â€”"}</td>
       <td>${r.executed ? "yes" : "no"}</td>
-      <td>${r.outcome || "—"}</td>
+      <td>${r.outcome || "â€”"}</td>
       <td class="num">${fmtInr(r.amount_recovered_inr)}</td>
     </tr>
   `).join("");
@@ -479,3 +480,5 @@ boot();
 </script>
 </body>
 </html>
+
+

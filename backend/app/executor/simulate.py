@@ -31,11 +31,14 @@ RESPONSE_RATES = {
 
 DEFAULT_RATE = 0.10
 
+_default_rng = random.Random()
 
-def simulate(category, action, amount_inr):
+
+def simulate(category, action, amount_inr, rng: random.Random = None):
     if action == Action.WRITE_OFF:
         return "not_recovered", 0.0
     rate = RESPONSE_RATES.get((category, action), DEFAULT_RATE)
-    if random.random() < rate:
+    r = rng if rng is not None else _default_rng
+    if r.random() < rate:
         return "recovered", amount_inr
     return "not_recovered", 0.0

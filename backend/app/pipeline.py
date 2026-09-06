@@ -1,4 +1,6 @@
-﻿from sqlalchemy.orm import Session
+﻿import random
+
+from sqlalchemy.orm import Session
 
 from backend.app.config import settings, Action, FALLBACK_ACTION, ACTION_COST_INR
 from backend.app.detector.ingest import ingest_events
@@ -20,7 +22,7 @@ def _select_policy_action(category, event, amount_inr):
     return action, confidence
 
 
-def process_event_agent(db: Session, event) -> dict:
+def process_event_agent(db: Session, event, outcome_rng: random.Random = None) -> dict:
     category, confidence, source = diagnose_rule_based(event)
     if settings.use_llm_diagnosis and confidence < settings.diagnosis_confidence_threshold:
         category, confidence, source = diagnose_with_llm(event, category, confidence)
@@ -45,7 +47,7 @@ def process_event_agent(db: Session, event) -> dict:
 
     if passed:
         executed = True
-        outcome, amount_recovered = simulate(category, action, event.amount_inr)
+        outcome, amount_recovered = simulate(category, action, event.amount_inr, rng=outcome_rng)
     else:
         fb = FALLBACK_ACTION.get(action)
         if fb is not None:
@@ -55,26 +57,13 @@ def process_event_agent(db: Session, event) -> dict:
             if fb_passed:
                 final_action = fb
                 executed = True
-                outcome, amount_recovered = simulate(category, fb, event.amount_inr)
+                outcome, amount_recovered = simulate(category, fb, event.amount_inr, rng=outcome_rng)
 
-    # Bandit feedback. Only applies when the bandit actually made the pick
-    # (policy_mode == "bandit") and Gate 1 didn't override it before it was
-    # ever tried (a Gate 1 override means the bandit's pick was discarded,
-    # not attempted -- there's nothing to give it feedback on).
     if settings.policy_mode == "bandit" and not gate1_override:
         if passed:
-            # Primary action passed Gate 2 and ran -- normal feedback.
             bandit_policy.update(category, event.context, action, outcome == "recovered")
         else:
-            # Primary action was REJECTED by Gate 2. This is real negative
-            # signal about that action in this context -- previously this
-            # was silently dropped, starving the bandit's learning for
-            # exactly the actions most likely to collide with compliance
-            # limits. Feed it back as a failure.
             bandit_policy.update(category, event.context, action, False)
-            # If a fallback ran, separately record its own real outcome
-            # too (harmless no-op if the fallback action isn't one of this
-            # category's candidate actions).
             if executed:
                 bandit_policy.update(category, event.context, final_action, outcome == "recovered")
 
@@ -103,7 +92,7 @@ def process_event_agent(db: Session, event) -> dict:
     return decision
 
 
-def process_event_baseline(db: Session, event) -> dict:
+def process_event_baseline(db: Session, event, outcome_rng: random.Random = None) -> dict:
     action = baseline_action_for(event)
     executed = False
     outcome = None
@@ -112,7 +101,7 @@ def process_event_baseline(db: Session, event) -> dict:
 
     if action is not None:
         executed = True
-        outcome, amount_recovered = simulate(BASELINE_CATEGORY, action, event.amount_inr)
+        outcome, amount_recovered = simulate(BASELINE_CATEGORY, action, event.amount_inr, rng=outcome_rng)
         action_cost = ACTION_COST_INR[action]
 
     decision = record_decision(
@@ -140,11 +129,14 @@ def process_event_baseline(db: Session, event) -> dict:
     return decision
 
 
-def run_batch(db: Session, batch_id: str, raw_events: list[dict]) -> dict:
+def run_batch(db: Session, batch_id: str, raw_events: list[dict], outcome_seed: int = None) -> dict:
     events, inserted_count, skipped_count = ingest_events(db, batch_id, raw_events)
+
+    outcome_rng = random.Random(outcome_seed) if outcome_seed is not None else None
+
     for event in events:
-        process_event_agent(db, event)
-        process_event_baseline(db, event)
+        process_event_agent(db, event, outcome_rng=outcome_rng)
+        process_event_baseline(db, event, outcome_rng=outcome_rng)
 
     from backend.app.metrics.report import build_metrics_report
     report = build_metrics_report(db, batch_id)

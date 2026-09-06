@@ -15,6 +15,52 @@ def _bucket_reason(reason: str) -> str:
     return re.split(r"\s*\(", reason, maxsplit=1)[0]
 
 
+def _compute_escalation_breakdown(agent_decisions: list[Decision]) -> dict:
+    """
+    Splits human_escalation decisions into three buckets instead of one
+    lumped 'false_escalation_count':
+
+      - low_confidence_escalations: Gate 1 overrode a low-confidence
+        diagnosis into human_escalation. These are hedges, not mistakes --
+        the system is paying a bounded cost (escalation) instead of betting
+        on an automated action it isn't confident will work.
+      - expected_escalations: category is willful_non_payment, where
+        human_escalation is the designed default action for that category.
+      - high_value_policy_escalations: the policy chose human_escalation on
+        its own (no Gate 1 override) for a non-willful category. Usually
+        means the expected-value math favored a human follow-up over an
+        automated retry for a high-value transaction -- a deliberate
+        economic call, not a "false" escalation.
+
+    Only agent decisions are considered; baseline decisions never escalate.
+    """
+    low_confidence_escalations = 0
+    expected_escalations = 0
+    high_value_policy_escalations = 0
+
+    for d in agent_decisions:
+        if d.chosen_action != Action.HUMAN_ESCALATION.value:
+            continue
+
+        if d.gate1_low_confidence_override:
+            low_confidence_escalations += 1
+        elif d.diagnosed_category == FailureCategory.WILLFUL_NON_PAYMENT.value:
+            expected_escalations += 1
+        else:
+            high_value_policy_escalations += 1
+
+    return {
+        "low_confidence_escalations": low_confidence_escalations,
+        "expected_escalations": expected_escalations,
+        "high_value_policy_escalations": high_value_policy_escalations,
+        "total_escalations": (
+            low_confidence_escalations
+            + expected_escalations
+            + high_value_policy_escalations
+        ),
+    }
+
+
 def build_metrics_report(db: Session, batch_id: str) -> dict:
     agent_decisions = (
         db.query(Decision)
@@ -44,12 +90,7 @@ def build_metrics_report(db: Session, batch_id: str) -> dict:
             for r in reasons:
                 rejection_reason_counts[_bucket_reason(r)] += 1
 
-    false_escalation_count = sum(
-        1 for d in agent_decisions
-        if d.chosen_action == Action.HUMAN_ESCALATION.value
-        and not d.gate1_low_confidence_override
-        and d.diagnosed_category != FailureCategory.WILLFUL_NON_PAYMENT.value
-    )
+    escalation_breakdown = _compute_escalation_breakdown(agent_decisions)
 
     gate1_overrides = sum(1 for d in agent_decisions if d.gate1_low_confidence_override)
 
@@ -74,7 +115,11 @@ def build_metrics_report(db: Session, batch_id: str) -> dict:
         "lift_inr": lift_inr,
         "compliance_rejections": compliance_rejections,
         "compliance_rejection_reasons": dict(rejection_reason_counts),
-        "false_escalation_count": false_escalation_count,
+        "escalation_breakdown": escalation_breakdown,
+        # kept for backward compatibility with the dashboard/any code still
+        # reading the old combined field -- equals high_value_policy_escalations,
+        # i.e. exactly what the old single-bucket definition counted
+        "false_escalation_count": escalation_breakdown["high_value_policy_escalations"],
         "gate1_low_confidence_overrides": gate1_overrides,
         "fallback_actions_used": fallback_used,
         "fallback_actions_executed": fallback_executed,
