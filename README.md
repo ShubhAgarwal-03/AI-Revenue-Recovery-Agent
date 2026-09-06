@@ -1,4 +1,4 @@
-# AI Revenue Recovery Engine
+﻿# AI Revenue Recovery Engine
 
 **Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery**
 
@@ -82,13 +82,14 @@ Open `http://127.0.0.1:8000/dashboard` and pick a batch from the dropdown.
 python backend/scripts/run_bandit_experiment.py
 ```
 
-Runs 10 rounds of the contextual bandit policy and reports the real recovery-rate trend — see `docs/known_issues.md` for the current (honestly reported) result and open questions around sample size.
+Runs 20 rounds of 400 events each (8,000 events total) against the contextual bandit policy, with outcome simulation seeded per round for reproducibility of the recovery draw. Reports the real recovery-rate trend — see `docs/known_issues.md` for the honestly-reported result: recovery rate hovers in a ~0.19–0.27 band with no reliable directional trend, and a linear regression across all 20 points comes out effectively flat.
 
 ## Tests
 
 ```bash
 pytest backend/tests/ -v
 ```
+20/20 passing.
 
 ## Repo layout
 
@@ -112,8 +113,9 @@ docs/
 
 This project intentionally documents its own failure modes rather than hiding them — see `docs/known_issues.md` and `docs/failure_case_writeup.md` for details, including:
 
-- The contextual bandit shows a net-negative recovery-rate trend over 10 rounds, likely due to sparse per-bucket samples (category × segment × action) — see known issues for the follow-up experiment.
-- `false_escalation_count` currently conflates low-confidence overrides with deliberate high-value escalations; a split metric is proposed but not yet implemented.
+- The contextual bandit's recovery-rate trend across 20 rounds is flat/inconclusive at this event volume, not net-negative — a naive "first 3 rounds vs last 3 rounds" comparison is noise-sensitive enough that three independent clean runs of the same seeds produced three different verdicts (net-negative, net-positive, net-positive). A regression slope across all 20 points (≈ −0.0004/batch) is the number we trust.
+- The bandit's action-selection randomness (Thompson sampling) isn't currently seeded — only outcome simulation is — so full run-to-run reproducibility in bandit mode isn't achieved yet.
+- `false_escalation_count` is now split into `low_confidence_escalations`, `expected_escalations`, `high_value_policy_escalations`, and `total_escalations` — the old field conflated Gate 1 overrides with deliberate, correct high-value escalations. Old field kept for backward compatibility.
 
 ## License / attribution
 
