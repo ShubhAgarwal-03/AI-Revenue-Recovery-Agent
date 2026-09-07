@@ -104,3 +104,17 @@ The PRD's stretch goal of treating SMS / WhatsApp / voice as distinct channels w
 different cost and success-rate tradeoffs (rather than one fixed action = one fixed
 cost/rate) was not built. Each contact action currently has a single fixed cost and
 response rate baked into `simulate.py`'s `RESPONSE_RATES` table.
+
+## Post-submission commits (Sep 6, 2026)
+
+Two small commits were made after the Sep 5 submission deadline:
+
+- **Character-encoding fix**: the ₹ symbol was rendering incorrectly (as `'`) in
+  PDF/dashboard output due to a cp1252/UTF-8 mismatch on the machine used to
+  record the demo. Fixed the encoding.
+- **Dashboard chart fix**: a chart in `dashboard/index.html` failed to load
+  locally due to a missing package on that machine. Fixed the dependency issue.
+
+Neither commit changed any logic, policy, architecture, or reported results —
+both were local rendering/environment issues unrelated to the recovery engine
+itself. Flagging here for transparency.
